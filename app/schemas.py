@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, HttpUrl, field_validator
 
 
 class RegisterRequest(BaseModel):
@@ -45,6 +45,14 @@ class UserResponse(BaseModel):
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=12000)
     conversation_id: int | None = None
+    image_urls: list[HttpUrl] = Field(default_factory=list, max_length=4)
+
+    @field_validator("image_urls")
+    @classmethod
+    def require_https_images(cls, value: list[HttpUrl]) -> list[HttpUrl]:
+        if any(image.scheme != "https" for image in value):
+            raise ValueError("Image URLs must use HTTPS")
+        return value
 
 
 class ChatResponse(BaseModel):

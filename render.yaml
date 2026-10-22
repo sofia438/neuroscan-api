@@ -22,4 +22,4 @@ services:
       - key: OPENROUTER_API_KEY
         sync: false
       - key: OPENROUTER_MODEL
-        value: mistralai/mistral-nemo
+        value: meta-llama/llama-4-scout

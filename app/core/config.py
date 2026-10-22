@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     brevo_sender_email: str = ""
     brevo_sender_name: str = "NeuroScan"
     openrouter_api_key: str = ""
-    openrouter_model: str = "mistralai/mistral-nemo"
+    openrouter_model: str = "meta-llama/llama-4-scout"
     openrouter_app_name: str = "NeuroScan"
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

@@ -1,6 +1,6 @@
 # NeuroScan API
 
-FastAPI backend with Neon PostgreSQL, email OTP registration through Brevo, bearer access tokens, rotating refresh tokens, and Mistral Nemo through OpenRouter.
+FastAPI backend with Neon PostgreSQL, email OTP registration through Brevo, bearer access tokens, rotating refresh tokens, and text/image chat through OpenRouter's Llama 4 Scout.
 
 ## Local setup
 
@@ -20,7 +20,7 @@ Never commit .env or share the database URL in source control. Set secrets in Re
 2. POST /api/v1/auth/verify-email with the emailed six-digit code. This returns access and refresh tokens.
 3. Send Authorization: Bearer <access_token> to protected endpoints.
 4. POST /api/v1/auth/refresh rotates a refresh token. POST /api/v1/auth/logout revokes it.
-5. POST /api/v1/chat with a message starts a conversation; include conversation_id to continue one.
+5. POST /api/v1/chat with a message starts a conversation; include conversation_id to continue one. Add up to four publicly accessible HTTPS image_urls to send images with the message.
 
 Other endpoints: POST /api/v1/auth/login, POST /api/v1/auth/resend-code, GET /api/v1/auth/me, GET /api/v1/chat/conversations, GET /api/v1/chat/conversations/{id}/messages, /health, and /ready.
 

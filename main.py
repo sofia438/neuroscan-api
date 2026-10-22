@@ -17,6 +17,9 @@ async def lifespan(_: FastAPI):
         if len(settings.jwt_secret) < 32:
             raise RuntimeError("JWT_SECRET must be set to a random value with at least 32 characters")
         Base.metadata.create_all(bind=get_engine())
+        # Add the image URL field when upgrading an existing first-version database.
+        with get_engine().begin() as connection:
+            connection.execute(text("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS image_urls JSON NOT NULL DEFAULT '[]'"))
     yield
     dispose_engine()
 

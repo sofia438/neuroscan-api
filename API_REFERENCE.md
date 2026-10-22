@@ -21,7 +21,7 @@ The API currently allows requests from all browser origins, methods, and headers
 | POST | /auth/refresh | No | Rotate a refresh token | {"refresh_token":"<refresh_token>"} |
 | POST | /auth/logout | Bearer | Revoke a refresh token | {"refresh_token":"<refresh_token>"} |
 | GET | /auth/me | Bearer | Return the signed-in user | None |
-| POST | /chat | Bearer | Start or continue a Mistral Nemo chat | {"message":"Hello"} or {"message":"Follow up","conversation_id":1} |
+| POST | /chat | Bearer | Start or continue a Llama 4 Scout text/image chat | {"message":"Describe this","image_urls":["https://images.example.com/photo.jpg"]} |
 | GET | /chat/conversations | Bearer | List this user's conversations | None |
 | GET | /chat/conversations/{conversation_id}/messages | Bearer | Read messages in one of this user's conversations | None |
 | GET | /health | No | Liveness check | None |
@@ -66,7 +66,8 @@ Passwords must be 10–128 characters. Verification codes expire after 10 minute
         Authorization: "Bearer " + accessToken,
       },
       body: JSON.stringify({
-        message: "What can you help me with?",
+        message: "Describe this image",
+        image_urls: ["https://images.example.com/photo.jpg"],
         conversation_id: null,
       }),
     });
@@ -80,6 +81,7 @@ Passwords must be 10–128 characters. Verification codes expire after 10 minute
 - Successful verification, login, and refresh return access_token, refresh_token, token_type, and expires_in.
 - Logout returns HTTP 204 with no response body.
 - Chat returns conversation_id and the assistant's reply.
+- Chat accepts up to four publicly reachable HTTPS image URLs per message. OpenRouter's model provider must be able to fetch each URL; image URLs are stored with chat history and sent to OpenRouter with the message.
 - Error responses use FastAPI's JSON format, for example {"detail":"Invalid email or password"}.
 
 Treat access and refresh tokens as secrets. Do not place them in URLs or log them. Avoid credentials: "include" in browser requests; this API uses bearer tokens rather than cookies.

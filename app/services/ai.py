@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Any
 
 import httpx
 
@@ -7,7 +8,7 @@ from app.core.config import get_settings
 SYSTEM_PROMPT = Path(__file__).resolve().parents[1].joinpath("prompts", "assistant_system.txt").read_text(encoding="utf-8")
 
 
-async def complete(messages: list[dict[str, str]]) -> str:
+async def complete(messages: list[dict[str, Any]]) -> str:
     settings = get_settings()
     if not settings.openrouter_api_key:
         raise RuntimeError("OpenRouter is not configured")
