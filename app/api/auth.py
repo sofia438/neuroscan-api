@@ -1,4 +1,5 @@
 import hmac
+import logging
 from datetime import UTC, datetime, timedelta
 
 import httpx
@@ -15,6 +16,7 @@ from app.security import create_access_token, create_refresh_token, hash_otp, ha
 from app.services.email import send_verification_code
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
+logger = logging.getLogger(__name__)
 
 
 async def issue_otp(user: User, db: Session) -> None:
@@ -36,6 +38,7 @@ async def issue_otp(user: User, db: Session) -> None:
     try:
         await send_verification_code(user.email, code)
     except (httpx.HTTPError, RuntimeError) as exc:
+        logger.exception("Verification email delivery failed; registration remains pending (%s)", type(exc).__name__)
         raise HTTPException(status_code=503, detail="Could not send verification email. Try again shortly.") from exc
 
 

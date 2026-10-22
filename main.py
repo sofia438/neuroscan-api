@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import logging
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -11,17 +12,41 @@ from app.api import auth, chat
 from app.core.config import get_settings
 from app.db import Base, database_configured, dispose_engine, get_engine
 
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    missing = [
+        name
+        for name, configured in (
+            ("DATABASE_URL", database_configured()),
+            ("JWT_SECRET", len(settings.jwt_secret) >= 32),
+            ("BREVO_API_KEY", bool(settings.brevo_api_key.strip())),
+            ("BREVO_SENDER_EMAIL", bool(settings.brevo_sender_email.strip())),
+            ("OPENROUTER_API_KEY", bool(settings.openrouter_api_key.strip())),
+        )
+        if not configured
+    ]
+    if missing:
+        logger.warning("Startup configuration is incomplete; missing: %s", ", ".join(missing))
+    else:
+        logger.info("Required service configuration is present")
     if database_configured():
         if len(settings.jwt_secret) < 32:
             raise RuntimeError("JWT_SECRET must be set to a random value with at least 32 characters")
-        Base.metadata.create_all(bind=get_engine())
-        # Add the image URL field when upgrading an existing first-version database.
-        with get_engine().begin() as connection:
-            connection.execute(text("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS image_urls JSON NOT NULL DEFAULT '[]'"))
-            connection.execute(text("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS image_data JSON NOT NULL DEFAULT '[]'"))
+        try:
+            Base.metadata.create_all(bind=get_engine())
+            # Add image fields when upgrading an existing database.
+            with get_engine().begin() as connection:
+                connection.execute(text("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS image_urls JSON NOT NULL DEFAULT '[]'"))
+                connection.execute(text("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS image_data JSON NOT NULL DEFAULT '[]'"))
+            logger.info("Database connection and schema initialization succeeded")
+        except Exception:
+            logger.exception("Database connection or schema initialization failed")
+            raise
+    else:
+        logger.warning("DATABASE_URL is missing; database-backed endpoints will fail")
     yield
     dispose_engine()
 
@@ -55,5 +80,6 @@ def ready() -> JSONResponse:
         with get_engine().connect() as connection:
             connection.execute(text("SELECT 1"))
     except Exception:
+        logger.exception("Readiness check failed while connecting to the database")
         return JSONResponse(status_code=503, content={"status": "unavailable"})
     return JSONResponse(content={"status": "ready"})
