@@ -20,9 +20,7 @@ class Settings(BaseSettings):
     brevo_sender_name: str = "NeuroScan"
     openrouter_api_key: str = ""
     openrouter_model: str = "mistralai/mistral-nemo"
-    openrouter_site_url: str = ""
     openrouter_app_name: str = "NeuroScan"
-    cors_origins: str = "http://localhost:3000,http://localhost:5173"
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     @field_validator("jwt_secret")
@@ -31,10 +29,6 @@ class Settings(BaseSettings):
         if value and len(value) < 32:
             raise ValueError("JWT_SECRET must be at least 32 characters")
         return value
-
-    @property
-    def cors_origin_list(self) -> list[str]:
-        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
 
 @lru_cache

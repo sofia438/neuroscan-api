@@ -10,6 +10,8 @@ FastAPI backend with Neon PostgreSQL, email OTP registration through Brevo, bear
 4. Start the API with uvicorn main:app --reload.
 5. Open /docs for the interactive API reference.
 
+For endpoint details and copyable request examples, see [API_REFERENCE.md](API_REFERENCE.md).
+
 Never commit .env or share the database URL in source control. Set secrets in Render's Environment settings for deployment.
 
 ## API flow
@@ -24,7 +26,7 @@ Other endpoints: POST /api/v1/auth/login, POST /api/v1/auth/resend-code, GET /ap
 
 ## Render
 
-Connect the repository to Render and use the included render.yaml Blueprint. Enter the Neon connection string, Brevo API key and sender email, OpenRouter key, and allowed frontend origins when prompted. The service uses Render's PORT and /health check. Free web services can spin down when idle; the first request after inactivity may take longer.
+Connect the repository to Render and use the included render.yaml Blueprint. Enter the Neon connection string, Brevo API key and sender email, and OpenRouter key when prompted. CORS currently allows all origins. The service uses Render's PORT and /health check. Free web services can spin down when idle; the first request after inactivity may take longer.
 
 ## Current implementation notes
 

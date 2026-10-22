@@ -23,5 +23,3 @@ services:
         sync: false
       - key: OPENROUTER_MODEL
         value: mistralai/mistral-nemo
-      - key: CORS_ORIGINS
-        sync: false
