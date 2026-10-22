@@ -1,8 +1,9 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy import text
 
 from app import models  # noqa: F401 - register model metadata
@@ -20,6 +21,7 @@ async def lifespan(_: FastAPI):
         # Add the image URL field when upgrading an existing first-version database.
         with get_engine().begin() as connection:
             connection.execute(text("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS image_urls JSON NOT NULL DEFAULT '[]'"))
+            connection.execute(text("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS image_data JSON NOT NULL DEFAULT '[]'"))
     yield
     dispose_engine()
 
@@ -33,7 +35,13 @@ app.include_router(chat.router, prefix="/api/v1")
 
 @app.get("/")
 def root() -> dict[str, str]:
-    return {"name": settings.app_name, "docs": "/docs", "health": "/health"}
+    return {"name": settings.app_name, "playground": "/playground", "docs": "/docs", "health": "/health"}
+
+
+@app.get("/playground", response_class=HTMLResponse)
+def playground() -> HTMLResponse:
+    page = Path(__file__).parent / "app" / "static" / "playground.html"
+    return HTMLResponse(page.read_text(encoding="utf-8"))
 
 
 @app.get("/health")

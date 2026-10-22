@@ -1,0 +1,426 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#10131c">
+  <title>NeuroScan API Playground</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #10131c;
+      --panel: #191e2a;
+      --panel-soft: #202737;
+      --line: #30394b;
+      --text: #edf2ff;
+      --muted: #a4aec2;
+      --accent: #8de1cc;
+      --accent-ink: #10221f;
+      --danger: #ffb5ad;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: radial-gradient(ellipse at 12% 0%, #26394a 0, transparent 38%), var(--bg);
+      color: var(--text);
+    }
+    .shell { width: min(980px, calc(100% - 32px)); margin: 0 auto; padding: 34px 0 56px; }
+    header { display: flex; justify-content: space-between; align-items: center; gap: 18px; margin-bottom: 28px; }
+    .brand { display: flex; align-items: center; gap: 13px; }
+    .mark { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 14px; background: var(--accent); color: var(--accent-ink); font-weight: 900; letter-spacing: -2px; }
+    h1, h2, p { margin-top: 0; }
+    h1 { font-size: clamp(1.35rem, 3vw, 1.8rem); margin-bottom: 3px; letter-spacing: -.04em; }
+    .subtitle, .muted { color: var(--muted); }
+    .subtitle { margin: 0; font-size: .92rem; }
+    a { color: var(--accent); }
+    .top-links { display: flex; gap: 16px; font-size: .9rem; }
+    .card { background: color-mix(in srgb, var(--panel) 94%, transparent); border: 1px solid var(--line); border-radius: 20px; padding: 24px; box-shadow: 0 18px 60px #0003; }
+    .auth-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+    .auth-grid .wide { grid-column: 1 / -1; }
+    h2 { font-size: 1.05rem; letter-spacing: -.02em; margin-bottom: 7px; }
+    .muted { font-size: .9rem; line-height: 1.5; margin-bottom: 18px; }
+    label { display: block; color: var(--muted); font-size: .82rem; margin: 14px 0 7px; }
+    input, textarea {
+      width: 100%; color: var(--text); background: #111722; border: 1px solid var(--line);
+      border-radius: 11px; padding: 12px 13px; font: inherit; outline: none;
+    }
+    input:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px #8de1cc20; }
+    input[type="file"] { padding: 9px; }
+    button {
+      border: 0; border-radius: 11px; padding: 11px 16px; font: inherit; font-weight: 700;
+      cursor: pointer; background: var(--accent); color: var(--accent-ink); transition: transform .15s, opacity .15s;
+    }
+    button:hover { transform: translateY(-1px); }
+    button:disabled { cursor: wait; opacity: .58; transform: none; }
+    button.secondary { color: var(--text); background: var(--panel-soft); border: 1px solid var(--line); }
+    form button { width: 100%; margin-top: 16px; }
+    .notice { min-height: 22px; margin: 14px 0 0; font-size: .9rem; color: var(--accent); }
+    .notice.error { color: var(--danger); }
+    .verify { max-width: 560px; margin: 18px auto 0; }
+    .chat { padding: 0; overflow: hidden; }
+    .chat-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 22px; border-bottom: 1px solid var(--line); }
+    .chat-head h2 { margin: 0 0 4px; }
+    .chat-head p { margin: 0; color: var(--muted); font-size: .86rem; }
+    .messages { height: min(52vh, 520px); min-height: 260px; overflow-y: auto; padding: 22px; display: flex; flex-direction: column; gap: 14px; }
+    .empty { color: var(--muted); text-align: center; margin: auto; font-size: .93rem; }
+    .message { max-width: min(78%, 680px); padding: 13px 15px; border-radius: 15px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .message.user { align-self: flex-end; color: #f3fbff; background: #304256; border-bottom-right-radius: 5px; }
+    .message.assistant { align-self: flex-start; background: var(--panel-soft); border-bottom-left-radius: 5px; }
+    .message img { display: block; max-width: min(100%, 360px); max-height: 250px; object-fit: contain; border-radius: 9px; margin-top: 10px; }
+    .composer { padding: 18px 22px 22px; border-top: 1px solid var(--line); background: #151a25; }
+    .composer textarea { min-height: 82px; max-height: 200px; resize: vertical; }
+    .upload-row { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+    .upload-row input { flex: 1; }
+    .upload-row button { min-width: 112px; }
+    .hint { color: var(--muted); font-size: .78rem; line-height: 1.45; margin: 10px 0 0; }
+    .image-preview { display: none; margin-top: 12px; max-height: 150px; max-width: 100%; border-radius: 10px; }
+    .footer-note { margin: 18px 2px 0; color: var(--muted); font-size: .78rem; line-height: 1.5; }
+    @media (max-width: 700px) {
+      .shell { width: min(100% - 20px, 620px); padding-top: 20px; }
+      header { align-items: flex-start; }
+      .top-links { flex-direction: column; gap: 5px; text-align: right; }
+      .card { padding: 18px; border-radius: 16px; }
+      .auth-grid { grid-template-columns: 1fr; }
+      .auth-grid .wide { grid-column: auto; }
+      .chat .chat-head, .composer { padding-left: 15px; padding-right: 15px; }
+      .messages { padding: 15px; }
+      .message { max-width: 90%; }
+      .upload-row { align-items: stretch; flex-direction: column; }
+      .upload-row button { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <div class="brand">
+        <div class="mark" aria-hidden="true">N</div>
+        <div>
+          <h1>NeuroScan API</h1>
+          <p class="subtitle">Developer playground · Llama 4 Scout vision</p>
+        </div>
+      </div>
+      <nav class="top-links" aria-label="Developer links">
+        <a href="/docs" target="_blank" rel="noreferrer">API docs</a>
+        <a href="/health" target="_blank" rel="noreferrer">Health</a>
+      </nav>
+    </header>
+
+    <section id="authPanel" class="card">
+      <div class="auth-grid">
+        <form id="registerForm">
+          <h2>Create an account</h2>
+          <p class="muted">Register, then enter the code sent to your inbox.</p>
+          <label for="registerEmail">Email</label>
+          <input id="registerEmail" type="email" autocomplete="email" required>
+          <label for="registerPassword">Password (10 characters minimum)</label>
+          <input id="registerPassword" type="password" autocomplete="new-password" minlength="10" maxlength="128" required>
+          <button type="submit">Create account</button>
+          <p id="registerNotice" class="notice" role="status"></p>
+        </form>
+        <form id="loginForm">
+          <h2>Sign in</h2>
+          <p class="muted">Use your verified account to open the chat playground.</p>
+          <label for="loginEmail">Email</label>
+          <input id="loginEmail" type="email" autocomplete="email" required>
+          <label for="loginPassword">Password</label>
+          <input id="loginPassword" type="password" autocomplete="current-password" required>
+          <button type="submit">Sign in</button>
+          <p id="loginNotice" class="notice" role="status"></p>
+        </form>
+      </div>
+      <form id="verifyForm" class="verify" hidden>
+        <h2>Verify your email</h2>
+        <p class="muted">Enter the six-digit code Brevo sent to your email address.</p>
+        <label for="verifyEmail">Email</label>
+        <input id="verifyEmail" type="email" autocomplete="email" required>
+        <label for="verifyCode">Six-digit code</label>
+        <input id="verifyCode" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required>
+        <button type="submit">Verify and continue</button>
+        <p id="verifyNotice" class="notice" role="status"></p>
+        <button id="resendButton" class="secondary" type="button">Resend code</button>
+      </form>
+    </section>
+
+    <section id="chatPanel" class="card chat" hidden>
+      <div class="chat-head">
+        <div>
+          <h2>Vision chat</h2>
+          <p id="signedInAs">Signed in</p>
+        </div>
+        <button id="logoutButton" class="secondary" type="button">Sign out</button>
+      </div>
+      <div id="messages" class="messages" aria-live="polite">
+        <p id="emptyState" class="empty">Ask a question, attach an image, or do both.</p>
+      </div>
+      <form id="chatForm" class="composer">
+        <label for="messageInput">Message</label>
+        <textarea id="messageInput" maxlength="12000" placeholder="Ask something about your image..." required></textarea>
+        <div class="upload-row">
+          <input id="imageInput" type="file" accept="image/jpeg,image/png,image/webp">
+          <button id="sendButton" type="submit">Send message</button>
+        </div>
+        <img id="imagePreview" class="image-preview" alt="Selected image preview">
+        <p class="hint">One JPEG, PNG, or WebP image up to 3 MB. Images and chat text are stored in your Neon chat history and sent to OpenRouter for the model response.</p>
+        <p id="chatNotice" class="notice" role="status"></p>
+      </form>
+    </section>
+
+    <p class="footer-note">This page is a basic developer demo. Do not use real patient or confidential images until your data handling and privacy requirements are established.</p>
+  </main>
+
+  <script>
+    const API = "/api/v1";
+    const authPanel = document.getElementById("authPanel");
+    const chatPanel = document.getElementById("chatPanel");
+    const messages = document.getElementById("messages");
+    const emptyState = document.getElementById("emptyState");
+    const imageInput = document.getElementById("imageInput");
+    const imagePreview = document.getElementById("imagePreview");
+    let accessToken = sessionStorage.getItem("neuroscan_access_token") || "";
+    let refreshToken = sessionStorage.getItem("neuroscan_refresh_token") || "";
+    let conversationId = null;
+    let selectedImageData = "";
+
+    function showNotice(id, text, isError) {
+      const element = document.getElementById(id);
+      element.textContent = text || "";
+      element.classList.toggle("error", Boolean(isError));
+    }
+
+    async function request(path, options, retry) {
+      const settings = options || {};
+      const headers = new Headers(settings.headers || {});
+      if (accessToken && !headers.has("Authorization")) headers.set("Authorization", "Bearer " + accessToken);
+      if (settings.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+      const response = await fetch(API + path, { ...settings, headers: headers });
+
+      if (response.status === 401 && retry !== false && refreshToken &&
+          (path.startsWith("/chat") || path === "/auth/me")) {
+        const refreshed = await fetch(API + "/auth/refresh", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ refresh_token: refreshToken }),
+        });
+        if (refreshed.ok) {
+          const tokens = await refreshed.json();
+          saveTokens(tokens);
+          return request(path, settings, false);
+        }
+        clearTokens();
+      }
+
+      const body = response.status === 204 ? null : await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body && body.detail ? body.detail : "Request failed with status " + response.status);
+      return body;
+    }
+
+    function saveTokens(tokens) {
+      accessToken = tokens.access_token;
+      refreshToken = tokens.refresh_token;
+      sessionStorage.setItem("neuroscan_access_token", accessToken);
+      sessionStorage.setItem("neuroscan_refresh_token", refreshToken);
+    }
+
+    function clearTokens() {
+      accessToken = "";
+      refreshToken = "";
+      sessionStorage.removeItem("neuroscan_access_token");
+      sessionStorage.removeItem("neuroscan_refresh_token");
+    }
+
+    function showChat(email) {
+      authPanel.hidden = true;
+      chatPanel.hidden = false;
+      document.getElementById("signedInAs").textContent = email || "Signed in";
+      document.getElementById("messageInput").focus();
+    }
+
+    function showAuth() {
+      chatPanel.hidden = true;
+      authPanel.hidden = false;
+    }
+
+    function addMessage(role, text, imageData) {
+      if (emptyState) emptyState.remove();
+      const bubble = document.createElement("div");
+      bubble.className = "message " + role;
+      bubble.textContent = text;
+      if (imageData) {
+        const image = document.createElement("img");
+        image.src = imageData;
+        image.alt = "Image attached to this message";
+        bubble.appendChild(image);
+      }
+      messages.appendChild(bubble);
+      messages.scrollTop = messages.scrollHeight;
+    }
+
+    function readFileAsDataUrl(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error("Could not read this image file"));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    document.getElementById("registerForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      showNotice("registerNotice", "Sending verification email...", false);
+      try {
+        const email = document.getElementById("registerEmail").value.trim();
+        const password = document.getElementById("registerPassword").value;
+        const result = await request("/auth/register", {
+          method: "POST", body: JSON.stringify({ email: email, password: password }),
+        });
+        document.getElementById("verifyEmail").value = email;
+        document.getElementById("verifyForm").hidden = false;
+        showNotice("registerNotice", result.message + " Check your inbox and spam folder.", false);
+      } catch (error) {
+        showNotice("registerNotice", error.message, true);
+      }
+    });
+
+    document.getElementById("verifyForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      showNotice("verifyNotice", "Checking code...", false);
+      try {
+        const result = await request("/auth/verify-email", {
+          method: "POST",
+          body: JSON.stringify({
+            email: document.getElementById("verifyEmail").value.trim(),
+            code: document.getElementById("verifyCode").value.trim(),
+          }),
+        });
+        saveTokens(result);
+        showChat(document.getElementById("verifyEmail").value.trim());
+      } catch (error) {
+        showNotice("verifyNotice", error.message, true);
+      }
+    });
+
+    document.getElementById("resendButton").addEventListener("click", async () => {
+      showNotice("verifyNotice", "Requesting another code...", false);
+      try {
+        const result = await request("/auth/resend-code", {
+          method: "POST",
+          body: JSON.stringify({ email: document.getElementById("verifyEmail").value.trim() }),
+        });
+        showNotice("verifyNotice", result.message, false);
+      } catch (error) {
+        showNotice("verifyNotice", error.message, true);
+      }
+    });
+
+    document.getElementById("loginForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      showNotice("loginNotice", "Signing in...", false);
+      try {
+        const email = document.getElementById("loginEmail").value.trim();
+        const result = await request("/auth/login", {
+          method: "POST",
+          body: JSON.stringify({ email: email, password: document.getElementById("loginPassword").value }),
+        });
+        saveTokens(result);
+        showChat(email);
+      } catch (error) {
+        showNotice("loginNotice", error.message, true);
+      }
+    });
+
+    imageInput.addEventListener("change", async () => {
+      selectedImageData = "";
+      imagePreview.hidden = true;
+      imagePreview.style.display = "none";
+      const file = imageInput.files && imageInput.files[0];
+      if (!file) return;
+      if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+        showNotice("chatNotice", "Choose a JPEG, PNG, or WebP image.", true);
+        imageInput.value = "";
+        return;
+      }
+      if (file.size > 3 * 1024 * 1024) {
+        showNotice("chatNotice", "Image must be 3 MB or smaller.", true);
+        imageInput.value = "";
+        return;
+      }
+      try {
+        selectedImageData = await readFileAsDataUrl(file);
+        imagePreview.src = selectedImageData;
+        imagePreview.hidden = false;
+        imagePreview.style.display = "block";
+        showNotice("chatNotice", "", false);
+      } catch (error) {
+        showNotice("chatNotice", error.message, true);
+      }
+    });
+
+    document.getElementById("chatForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const message = document.getElementById("messageInput").value.trim();
+      if (!message) return;
+      const sendButton = document.getElementById("sendButton");
+      sendButton.disabled = true;
+      showNotice("chatNotice", "Sending to Llama 4 Scout...", false);
+      const imageForBubble = selectedImageData;
+      addMessage("user", message, imageForBubble);
+      try {
+        const result = await request("/chat", {
+          method: "POST",
+          body: JSON.stringify({
+            message: message,
+            conversation_id: conversationId,
+            image_data: imageForBubble ? [imageForBubble] : [],
+          }),
+        });
+        conversationId = result.conversation_id;
+        addMessage("assistant", result.reply);
+        document.getElementById("messageInput").value = "";
+        imageInput.value = "";
+        selectedImageData = "";
+        imagePreview.removeAttribute("src");
+        imagePreview.hidden = true;
+        imagePreview.style.display = "none";
+        showNotice("chatNotice", "", false);
+      } catch (error) {
+        addMessage("assistant", "Request failed: " + error.message);
+        showNotice("chatNotice", error.message, true);
+      } finally {
+        sendButton.disabled = false;
+      }
+    });
+
+    document.getElementById("logoutButton").addEventListener("click", async () => {
+      try {
+        if (accessToken && refreshToken) {
+          await request("/auth/logout", {
+            method: "POST",
+            body: JSON.stringify({ refresh_token: refreshToken }),
+          });
+        }
+      } catch (_) {
+        // Clear local session even if the server cannot be reached.
+      }
+      clearTokens();
+      conversationId = null;
+      messages.replaceChildren();
+      const empty = document.createElement("p");
+      empty.id = "emptyState";
+      empty.className = "empty";
+      empty.textContent = "Ask a question, attach an image, or do both.";
+      messages.appendChild(empty);
+      showAuth();
+    });
+
+    if (accessToken) {
+      request("/auth/me").then((user) => showChat(user.email)).catch(() => {
+        clearTokens();
+        showAuth();
+      });
+    }
+  </script>
+</body>
+</html>

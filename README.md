@@ -21,6 +21,7 @@ Never commit .env or share the database URL in source control. Set secrets in Re
 3. Send Authorization: Bearer <access_token> to protected endpoints.
 4. POST /api/v1/auth/refresh rotates a refresh token. POST /api/v1/auth/logout revokes it.
 5. POST /api/v1/chat with a message starts a conversation; include conversation_id to continue one. Add up to four publicly accessible HTTPS image_urls to send images with the message.
+6. Open /playground for a simple browser UI to register, verify email, log in, and send chat messages with an image file.
 
 Other endpoints: POST /api/v1/auth/login, POST /api/v1/auth/resend-code, GET /api/v1/auth/me, GET /api/v1/chat/conversations, GET /api/v1/chat/conversations/{id}/messages, /health, and /ready.
 
@@ -33,4 +34,5 @@ Connect the repository to Render and use the included render.yaml Blueprint. Ent
 - On first startup, SQLAlchemy creates the tables. For ongoing production schema changes, add Alembic migrations before evolving the schema.
 - Email sending and OpenRouter requests use bounded timeouts. Provider credentials are read from environment variables.
 - The AI system instructions live in app/prompts/assistant_system.txt.
+- Image URLs and uploaded image data are stored in the user's chat history in Neon and forwarded to OpenRouter.
 - Add request rate limiting and an abuse control at the edge before opening public registration broadly.

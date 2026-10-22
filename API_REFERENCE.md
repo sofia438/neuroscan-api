@@ -5,6 +5,7 @@ The API uses JSON and bearer tokens. Once deployed, set the base URL to:
     https://YOUR-RENDER-SERVICE.onrender.com/api/v1
 
 Interactive OpenAPI documentation is available at https://YOUR-RENDER-SERVICE.onrender.com/docs.
+The browser demo is available at https://YOUR-RENDER-SERVICE.onrender.com/playground.
 
 ## CORS
 
@@ -26,8 +27,9 @@ The API currently allows requests from all browser origins, methods, and headers
 | GET | /chat/conversations/{conversation_id}/messages | Bearer | Read messages in one of this user's conversations | None |
 | GET | /health | No | Liveness check | None |
 | GET | /ready | No | Database readiness check; returns 503 if the database is unavailable | None |
+| GET | /playground | No | Browser demo for signup, verification, login, and image chat | None |
 
-Paths above are relative to /api/v1, except /health and /ready, which are at the service root.
+Paths above are relative to /api/v1, except /health, /ready, and /playground, which are at the service root.
 
 ### Registration and login flow
 
@@ -59,6 +61,14 @@ Passwords must be 10–128 characters. Verification codes expire after 10 minute
 
 ### Chat example
 
+    const fileToDataUrl = (file) => new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+    const imageDataUrl = selectedFile ? await fileToDataUrl(selectedFile) : null;
     const response = await fetch(API + "/chat", {
       method: "POST",
       headers: {
@@ -67,7 +77,8 @@ Passwords must be 10–128 characters. Verification codes expire after 10 minute
       },
       body: JSON.stringify({
         message: "Describe this image",
-        image_urls: ["https://images.example.com/photo.jpg"],
+        image_data: imageDataUrl ? [imageDataUrl] : [],
+        // image_urls: ["https://images.example.com/photo.jpg"],
         conversation_id: null,
       }),
     });
@@ -82,6 +93,8 @@ Passwords must be 10–128 characters. Verification codes expire after 10 minute
 - Logout returns HTTP 204 with no response body.
 - Chat returns conversation_id and the assistant's reply.
 - Chat accepts up to four publicly reachable HTTPS image URLs per message. OpenRouter's model provider must be able to fetch each URL; image URLs are stored with chat history and sent to OpenRouter with the message.
+- Chat also accepts one direct image in image_data as a base64 data URL: JPEG, PNG, or WebP, up to 3 MB before base64 encoding. The image data is stored with chat history in Neon and sent to OpenRouter. The playground converts a selected image file to this format.
+- The direct upload request is JSON with image_data set to an array containing the data URL returned by FileReader.readAsDataURL(file). The browser playground is available at /playground.
 - Error responses use FastAPI's JSON format, for example {"detail":"Invalid email or password"}.
 
 Treat access and refresh tokens as secrets. Do not place them in URLs or log them. Avoid credentials: "include" in browser requests; this API uses bearer tokens rather than cookies.
