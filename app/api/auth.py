@@ -1,5 +1,6 @@
 import hmac
 import logging
+import secrets
 from datetime import UTC, datetime, timedelta
 
 import httpx
@@ -10,10 +11,10 @@ from sqlalchemy.orm import Session
 from app.api.deps import current_user
 from app.core.config import get_settings
 from app.db import get_db
-from app.models import EmailOTP, RefreshToken, User
-from app.schemas import LoginRequest, RefreshRequest, RegisterRequest, ResendOTPRequest, TokenResponse, UserResponse, VerifyEmailRequest
+from app.models import EmailOTP, PasswordResetGrant, PasswordResetOTP, RefreshToken, User
+from app.schemas import ForgotPasswordRequest, LoginRequest, RefreshRequest, RegisterRequest, ResendOTPRequest, ResetPasswordRequest, TokenResponse, UserResponse, VerifyEmailRequest, VerifyResetCodeRequest
 from app.security import create_access_token, create_refresh_token, hash_otp, hash_password, hash_token, new_otp, verify_password
-from app.services.email import send_verification_code
+from app.services.email import send_password_reset_code, send_verification_code
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 logger = logging.getLogger(__name__)
@@ -130,3 +131,119 @@ def logout(payload: RefreshRequest, db: Session = Depends(get_db), user: User = 
 @router.get("/me", response_model=UserResponse)
 def me(user: User = Depends(current_user)) -> User:
     return user
+
+
+@router.post("/forgot-password", status_code=status.HTTP_202_ACCEPTED)
+async def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db)) -> dict[str, str]:
+    """Always return the same response so callers cannot discover registered emails."""
+    email = str(payload.email).lower()
+    user = db.scalar(select(User).where(User.email == email, User.is_verified.is_(True)))
+    if not user:
+        return {"message": "If an account exists for this address, a password reset code has been sent."}
+
+    settings = get_settings()
+    now = datetime.now(UTC)
+    record = db.scalar(select(PasswordResetOTP).where(PasswordResetOTP.user_id == user.id).with_for_update())
+    if record and record.sent_at.replace(tzinfo=UTC) + timedelta(seconds=settings.otp_resend_seconds) > now:
+        return {"message": "If an account exists for this address, a password reset code has been sent."}
+
+    code = new_otp()
+    if record is None:
+        record = PasswordResetOTP(
+            user_id=user.id,
+            code_hash=hash_otp(email, code),
+            expires_at=now + timedelta(minutes=settings.otp_expiry_minutes),
+            sent_at=now,
+            attempts=0,
+        )
+        db.add(record)
+    else:
+        record.code_hash = hash_otp(email, code)
+        record.expires_at = now + timedelta(minutes=settings.otp_expiry_minutes)
+        record.sent_at = now
+        record.attempts = 0
+    # A newly requested code invalidates reset grants issued from earlier codes.
+    db.query(PasswordResetGrant).filter(
+        PasswordResetGrant.user_id == user.id,
+        PasswordResetGrant.consumed_at.is_(None),
+        PasswordResetGrant.revoked_at.is_(None),
+    ).update({PasswordResetGrant.revoked_at: now}, synchronize_session=False)
+    db.commit()
+
+    try:
+        await send_password_reset_code(email, code)
+    except (httpx.HTTPError, RuntimeError) as exc:
+        logger.exception("Password reset email delivery failed (%s)", type(exc).__name__)
+        db.delete(record)
+        db.commit()
+    return {"message": "If an account exists for this address, a password reset code has been sent."}
+
+
+@router.post("/verify-reset-code")
+def verify_reset_code(payload: VerifyResetCodeRequest, db: Session = Depends(get_db)) -> dict[str, int | str]:
+    email = str(payload.email).lower()
+    user = db.scalar(select(User).where(User.email == email, User.is_verified.is_(True)))
+    record = (
+        db.scalar(select(PasswordResetOTP).where(PasswordResetOTP.user_id == user.id).with_for_update())
+        if user
+        else None
+    )
+    now = datetime.now(UTC)
+    if (
+        not user
+        or not record
+        or record.expires_at.replace(tzinfo=UTC) <= now
+        or record.attempts >= get_settings().otp_max_attempts
+    ):
+        if record:
+            db.delete(record)
+            db.commit()
+        raise HTTPException(status_code=400, detail="Invalid or expired password reset code")
+
+    record.attempts += 1
+    if not hmac.compare_digest(record.code_hash, hash_otp(email, payload.code)):
+        db.commit()
+        raise HTTPException(status_code=400, detail="Invalid or expired password reset code")
+
+    settings = get_settings()
+    raw_token = secrets.token_urlsafe(48)
+    db.add(
+        PasswordResetGrant(
+            user_id=user.id,
+            token_hash=hash_token(raw_token),
+            expires_at=now + timedelta(minutes=settings.password_reset_token_minutes),
+        )
+    )
+    db.delete(record)
+    db.commit()
+    return {"reset_token": raw_token, "expires_in": settings.password_reset_token_minutes * 60}
+
+
+@router.post("/reset-password")
+def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db)) -> dict[str, str]:
+    now = datetime.now(UTC)
+    grant = db.scalar(
+        select(PasswordResetGrant)
+        .where(PasswordResetGrant.token_hash == hash_token(payload.reset_token))
+        .with_for_update()
+    )
+    if (
+        not grant
+        or grant.consumed_at is not None
+        or grant.revoked_at is not None
+        or grant.expires_at.replace(tzinfo=UTC) <= now
+    ):
+        raise HTTPException(status_code=400, detail="Invalid or expired password reset authorization")
+
+    user = db.get(User, grant.user_id)
+    if not user or not user.is_verified:
+        raise HTTPException(status_code=400, detail="Invalid or expired password reset authorization")
+
+    user.password_hash = hash_password(payload.new_password)
+    grant.consumed_at = now
+    db.query(RefreshToken).filter(
+        RefreshToken.user_id == user.id,
+        RefreshToken.revoked_at.is_(None),
+    ).update({RefreshToken.revoked_at: now}, synchronize_session=False)
+    db.commit()
+    return {"message": "Password has been reset. Please log in with your new password."}

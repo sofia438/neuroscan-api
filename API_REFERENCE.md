@@ -22,6 +22,9 @@ The API currently allows requests from all browser origins, methods, and headers
 | POST | /auth/refresh | No | Rotate a refresh token | {"refresh_token":"<refresh_token>"} |
 | POST | /auth/logout | Bearer | Revoke a refresh token | {"refresh_token":"<refresh_token>"} |
 | GET | /auth/me | Bearer | Return the signed-in user | None |
+| POST | /auth/forgot-password | No | Email a reset code if the verified account exists | {"email":"person@example.com"} |
+| POST | /auth/verify-reset-code | No | Verify the code; returns a short-lived reset_token | {"email":"person@example.com","code":"123456"} |
+| POST | /auth/reset-password | No | Set a new password using the single-use reset token | {"reset_token":"<reset_token>","new_password":"new-password-10-chars"} |
 | POST | /chat | Bearer | Start or continue a Llama 4 Scout text/image chat | {"message":"Describe this","image_urls":["https://images.example.com/photo.jpg"]} |
 | GET | /chat/conversations | Bearer | List this user's conversations | None |
 | GET | /chat/conversations/{conversation_id}/messages | Bearer | Read messages in one of this user's conversations | None |
@@ -41,6 +44,12 @@ Paths above are relative to /api/v1, except /health, /ready, and /playground, wh
 6. Call POST /auth/logout with the access token and current refresh token when the user signs out.
 
 Passwords must be 10–128 characters. Verification codes expire after 10 minutes by default; resends have a 60-second cooldown and verification is limited to five attempts. These values are configurable in the environment.
+
+### Forgot-password flow
+
+1. Call POST /auth/forgot-password with the account email. It always returns the same 202 response whether or not a verified account exists, to avoid disclosing registered addresses.
+2. Submit the six-digit code emailed by Brevo to POST /auth/verify-reset-code. A successful response contains reset_token and expires_in (seconds). The reset authorization expires after 10 minutes by default.
+3. Call POST /auth/reset-password with reset_token and new_password. The authorization can be used once. Successful password changes revoke all refresh tokens for the account; already-issued access tokens can remain valid until their short expiry.
 
 ### Browser example
 

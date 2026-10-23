@@ -23,6 +23,8 @@ Never commit .env or share the database URL in source control. Set secrets in Re
 5. POST /api/v1/chat with a message starts a conversation; include conversation_id to continue one. Add up to four publicly accessible HTTPS image_urls to send images with the message.
 6. Open /playground for a simple browser UI to register, verify email, log in, and send chat messages with an image file.
 
+Forgot-password flow: POST /api/v1/auth/forgot-password, POST /api/v1/auth/verify-reset-code, then POST /api/v1/auth/reset-password. The reset authorization is single-use and expires after 10 minutes by default.
+
 Other endpoints: POST /api/v1/auth/login, POST /api/v1/auth/resend-code, GET /api/v1/auth/me, GET /api/v1/chat/conversations, GET /api/v1/chat/conversations/{id}/messages, /health, and /ready.
 
 ## Render

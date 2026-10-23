@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     otp_expiry_minutes: int = 10
     otp_resend_seconds: int = 60
     otp_max_attempts: int = 5
+    password_reset_token_minutes: int = 10
     brevo_api_key: str = ""
     brevo_sender_email: str = ""
     brevo_sender_name: str = "NeuroScan"
