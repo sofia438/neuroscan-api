@@ -21,5 +21,19 @@ services:
         sync: false
       - key: OPENROUTER_API_KEY
         sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
       - key: OPENROUTER_MODEL
         value: meta-llama/llama-4-scout
+      - key: CORS_ORIGINS
+        sync: false
+      - key: MRI_STORAGE_DIR
+        value: ./storage/mri
+      - key: MRI_MAX_UPLOAD_BYTES
+        value: "2147483648"

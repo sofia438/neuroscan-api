@@ -1,5 +1,5 @@
-from contextlib import asynccontextmanager
 import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -7,10 +7,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy import text
 
-from app import models  # noqa: F401 - register model metadata
-from app.api import auth, chat
+from app.api import auth, cases, chat
 from app.core.config import get_settings
-from app.db import Base, database_configured, dispose_engine, get_engine
+from app.core.middleware import MRIUploadSizeLimitMiddleware
+from app.db import database_configured, dispose_engine, get_engine
 
 logger = logging.getLogger(__name__)
 
@@ -29,38 +29,51 @@ async def lifespan(_: FastAPI):
         if not configured
     ]
     if missing:
-        logger.warning("Startup configuration is incomplete; missing: %s", ", ".join(missing))
+        logger.warning(
+            "Startup configuration is incomplete; missing: %s", ", ".join(missing)
+        )
     else:
         logger.info("Required service configuration is present")
-    if database_configured():
-        if len(settings.jwt_secret) < 32:
-            raise RuntimeError("JWT_SECRET must be set to a random value with at least 32 characters")
-        try:
-            Base.metadata.create_all(bind=get_engine())
-            # Add image fields when upgrading an existing database.
-            with get_engine().begin() as connection:
-                connection.execute(text("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS image_urls JSON NOT NULL DEFAULT '[]'"))
-                connection.execute(text("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS image_data JSON NOT NULL DEFAULT '[]'"))
-            logger.info("Database connection and schema initialization succeeded")
-        except Exception:
-            logger.exception("Database connection or schema initialization failed")
-            raise
-    else:
-        logger.warning("DATABASE_URL is missing; database-backed endpoints will fail")
+    if not database_configured():
+        raise RuntimeError("DATABASE_URL is required; configure Neon PostgreSQL before starting the API")
+    if len(settings.jwt_secret) < 32:
+        raise RuntimeError("JWT_SECRET must be set to a random value with at least 32 characters")
+    try:
+        with get_engine().connect() as connection:
+            connection.execute(text("SELECT 1"))
+        logger.info("PostgreSQL connection check succeeded")
+    except Exception:
+        logger.exception("Configured database connection failed; refusing startup without fallback")
+        raise
     yield
     dispose_engine()
 
 
 settings = get_settings()
 app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=False, allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.allowed_origins,
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["Authorization", "Content-Type"],
+)
+app.add_middleware(
+    MRIUploadSizeLimitMiddleware, max_file_bytes=settings.mri_max_upload_bytes
+)
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(chat.router, prefix="/api/v1")
+app.include_router(cases.router, prefix="/api/v1")
 
 
 @app.get("/")
 def root() -> dict[str, str]:
-    return {"name": settings.app_name, "playground": "/playground", "docs": "/docs", "health": "/health"}
+    return {
+        "name": settings.app_name,
+        "playground": "/playground",
+        "docs": "/docs",
+        "health": "/health",
+    }
 
 
 @app.get("/playground", response_class=HTMLResponse)

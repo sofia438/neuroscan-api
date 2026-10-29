@@ -3,7 +3,9 @@ import secrets
 from datetime import UTC, datetime, timedelta
 
 import jwt
+from argon2.exceptions import InvalidHashError, VerificationError
 from pwdlib import PasswordHash
+from pwdlib.exceptions import UnknownHashError
 
 from app.core.config import get_settings
 
@@ -17,7 +19,7 @@ def hash_password(password: str) -> str:
 def verify_password(password: str, hashed: str) -> bool:
     try:
         return password_hash.verify(password, hashed)
-    except Exception:
+    except (VerificationError, InvalidHashError, UnknownHashError):
         return False
 
 
@@ -28,7 +30,16 @@ def hash_token(token: str) -> str:
 def create_access_token(user_id: int) -> str:
     settings = get_settings()
     now = datetime.now(UTC)
-    return jwt.encode({"sub": str(user_id), "iat": now, "exp": now + timedelta(minutes=settings.access_token_minutes), "type": "access"}, settings.jwt_secret, algorithm=settings.jwt_algorithm)
+    return jwt.encode(
+        {
+            "sub": str(user_id),
+            "iat": now,
+            "exp": now + timedelta(minutes=settings.access_token_minutes),
+            "type": "access",
+        },
+        settings.jwt_secret,
+        algorithm=settings.jwt_algorithm,
+    )
 
 
 def create_refresh_token(user_id: int) -> tuple[str, datetime]:
@@ -44,4 +55,6 @@ def new_otp() -> str:
 
 def hash_otp(email: str, code: str) -> str:
     secret = get_settings().jwt_secret.encode()
-    return hashlib.pbkdf2_hmac("sha256", code.encode(), secret + email.lower().encode(), 120_000).hex()
+    return hashlib.pbkdf2_hmac(
+        "sha256", code.encode(), secret + email.lower().encode(), 120_000
+    ).hex()

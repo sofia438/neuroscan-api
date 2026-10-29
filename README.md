@@ -1,40 +1,80 @@
 # NeuroScan API
 
-FastAPI backend with Neon PostgreSQL, email OTP registration through Brevo, bearer access tokens, rotating refresh tokens, and text/image chat through OpenRouter's Llama 4 Scout.
+FastAPI backend for NeuroScan account authentication, role-scoped case management, MRI file intake, visit/report storage, and the existing optional chat service. It uses PostgreSQL (for example Neon) and stores uploaded scans on the configured filesystem path. It does not run an MRI model or create predicted results.
 
-## Local setup
+## Local setup (PowerShell)
 
-1. Use Python 3.12 or newer and create a virtual environment.
-2. Install dependencies with pip install -r requirements.txt.
-3. Copy .env.example to .env and fill in DATABASE_URL, JWT_SECRET, Brevo credentials, and the OpenRouter API key. The Neon URL should include sslmode=require; prefer Neon’s pooled URL for the web app.
-4. Start the API with uvicorn main:app --reload.
-5. Open /docs for the interactive API reference.
+The environment was checked before choosing a version: the Windows `py` launcher does not register an interpreter, but the installed Python 3.14.3 executable at `C:\Users\ASUS\AppData\Local\Programs\Python\Python314\python.exe` works. The pinned dependencies installed under it. From this directory, create/activate the environment:
 
-For endpoint details and copyable request examples, see [API_REFERENCE.md](API_REFERENCE.md).
+```powershell
+$Python = 'C:\Users\ASUS\AppData\Local\Programs\Python\Python314\python.exe'
+& $Python --version
+New-Item -ItemType Directory -Force .tmp | Out-Null
+$env:TEMP = (Resolve-Path .tmp).Path
+$env:TMP = $env:TEMP
+if (-not (Test-Path .venv\Scripts\python.exe)) { & $Python -m venv .venv }
+.\.venv\Scripts\Activate.ps1
+python -m ensurepip --upgrade
+python -m pip install -r requirements-dev.txt
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+```
 
-Never commit .env or share the database URL in source control. Set secrets in Render's Environment settings for deployment.
+Edit `.env` with Neon's **pooled** PostgreSQL connection URL as `DATABASE_URL` and a random `JWT_SECRET` of at least 32 characters. Keep the password only in `.env` or your deployment secret store. Generate a secret with:
 
-## API flow
+```powershell
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
 
-1. POST /api/v1/auth/register with email and a password of at least 10 characters.
-2. POST /api/v1/auth/verify-email with the emailed six-digit code. This returns access and refresh tokens.
-3. Send Authorization: Bearer <access_token> to protected endpoints.
-4. POST /api/v1/auth/refresh rotates a refresh token. POST /api/v1/auth/logout revokes it.
-5. POST /api/v1/chat with a message starts a conversation; include conversation_id to continue one. Add up to four publicly accessible HTTPS image_urls to send images with the message.
-6. Open /playground for a simple browser UI to register, verify email, log in, and send chat messages with an image file.
+Set Brevo sender/key before using email registration, verification, or password recovery. Set `OPENROUTER_API_KEY` to enable `/chat`; case routes do not need it. Set `CORS_ORIGINS` to the exact frontend origin, normally `http://localhost:5173` for Vite. Comma-separated origins are accepted.
 
-Forgot-password flow: POST /api/v1/auth/forgot-password, POST /api/v1/auth/verify-reset-code, then POST /api/v1/auth/reset-password. The reset authorization is single-use and expires after 10 minutes by default.
+For local Google sign-in, configure `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in the backend-only `.env`, with `GOOGLE_REDIRECT_URI=http://127.0.0.1:8000/api/v1/auth/google/callback` and `FRONTEND_URL=http://localhost:5173`. In Google Auth Platform, create a Web application client with that exact redirect URI. Never put the client secret in Vite variables. The backend uses authorization code flow with state, OIDC nonce, PKCE, Google ID-token signature/issuer/audience/email verification, and a short-lived one-time handoff code in the URL fragment; the frontend exchanges that code for NeuroScan tokens. Google identities create patient accounts only. A matching existing email/password account is rejected for manual sign-in; it is never automatically linked.
 
-Other endpoints: POST /api/v1/auth/login, POST /api/v1/auth/resend-code, GET /api/v1/auth/me, GET /api/v1/chat/conversations, GET /api/v1/chat/conversations/{id}/messages, /health, and /ready.
+The `psycopg` 3 driver is installed by `requirements.txt`. PostgreSQL is required for normal startup: a missing URL or failed PostgreSQL connection stops the application, and the backend never falls back to SQLite. SQLite remains available only to isolated unit tests that explicitly set `ENVIRONMENT=test`.
 
-## Render
+## Database migrations
 
-Connect the repository to Render and use the included render.yaml Blueprint. Enter the Neon connection string, Brevo API key and sender email, and OpenRouter key when prompted. CORS currently allows all origins. The service uses Render's PORT and /health check. Free web services can spin down when idle; the first request after inactivity may take longer.
+The previous `create_all` plus additive startup changes did not track schema versions and could not safely manage future changes. Alembic is now the versioned migration mechanism. The baseline migration is additive: it creates missing tables and applies the existing legacy column additions without dropping tables or rows. App startup checks PostgreSQL connectivity only; it does not change the schema. Review and run migrations before starting a new deployment:
 
-## Current implementation notes
+```powershell
+alembic upgrade head
+```
 
-- On first startup, SQLAlchemy creates the tables. For ongoing production schema changes, add Alembic migrations before evolving the schema.
-- Email sending and OpenRouter requests use bounded timeouts. Provider credentials are read from environment variables.
-- The AI system instructions live in app/prompts/assistant_system.txt.
-- Image URLs and uploaded image data are stored in the user's chat history in Neon and forwarded to OpenRouter.
-- Add request rate limiting and an abuse control at the edge before opening public registration broadly.
+For Neon, use the pooled URL in `DATABASE_URL` for the app. For migrations, prefer Neon's direct (non-pooled) URL in `MIGRATION_DATABASE_URL`, since schema DDL and migration locks are better suited to a direct connection. If no separate migration URL is set, Alembic uses `DATABASE_URL`. Keep both values secret and do not commit `.env`.
+
+Run locally:
+
+```powershell
+uvicorn main:app --reload --host 127.0.0.1 --port 8000
+```
+
+Open `http://127.0.0.1:8000/docs` for interactive API documentation.
+
+Run endpoint and validation tests:
+
+```powershell
+pytest -q
+```
+
+The PostgreSQL integration test is opt-in and requires `NEUROSCAN_TEST_DATABASE_URL` pointing to a dedicated disposable PostgreSQL database named with a `neuroscan_test` prefix or `_test` suffix. It applies migrations and adds uniquely named fixture rows without truncating or dropping anything. Do not point it at production. Unit tests use isolated SQLite and mocks; they do not verify Neon behavior. MRI files are stored under `MRI_STORAGE_DIR`; use durable private storage in deployment and set `MRI_MAX_UPLOAD_BYTES` for the intended limit.
+
+Example PowerShell commands (replace the placeholder locally with the dedicated test database URL; do not commit it):
+
+```powershell
+$env:NEUROSCAN_TEST_DATABASE_URL = 'postgresql://USER:PASSWORD@HOST/neuroscan_test_db?sslmode=require'
+pytest -q tests/test_postgres_integration.py
+Remove-Item Env:NEUROSCAN_TEST_DATABASE_URL
+```
+
+## Frontend connection status
+
+`NeuroScan-main` uses the FastAPI client for authentication, profiles, cases, visits, visibility, uploads, and Google sign-in. The Google flow is only ready after the OAuth migration is applied to a non-production database, client settings are present, and frontend/backend testing succeeds. See [API_REFERENCE.md](API_REFERENCE.md) for the route map.
+
+## Configuration notes
+
+- `.env` is local-only and ignored by Git. `.env.example` contains placeholders.
+- Never put PostgreSQL, Brevo, or OpenRouter secrets in frontend variables.
+- Local MRI files are not cloud storage. Multi-instance deployments need durable private shared storage or object storage.
+- `doctor_verified` is stored for an approval workflow. The current frontend feature flag does not require approval.
+- Protected endpoints use bearer tokens and check roles and resource ownership server-side.
+
+The existing OpenRouter chat endpoint remains separate. It needs a configured key and clinical review before use with patients.

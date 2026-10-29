@@ -1,5 +1,7 @@
 .env
 .venv/
+.venv*/
+.tmp/
 __pycache__/
 *.py[cod]
 .pytest_cache/
@@ -9,3 +11,4 @@ __pycache__/
 htmlcov/
 dist/
 build/
+storage/
